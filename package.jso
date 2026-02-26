@@ -1,0 +1,11 @@
+{
+  "name": "educational-logger",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "echo 'Deploy to Vercel/Netlify — no local server needed'"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
