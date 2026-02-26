@@ -26,38 +26,38 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      overflow: hidden;
+      padding: 20px;
     }
 
     h1 {
       font-family: 'Orbitron', sans-serif;
-      font-size: 4.5rem;
+      font-size: clamp(2.5rem, 8vw, 4.5rem);
       background: linear-gradient(90deg, #00eaff, #a78bfa, #ff71ce);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       text-shadow: var(--glow);
-      letter-spacing: 4px;
-      margin-bottom: 0.8rem;
+      letter-spacing: 3px;
+      margin-bottom: 1rem;
+      text-align: center;
     }
 
     .subtitle {
-      font-size: 1.4rem;
-      max-width: 800px;
+      font-size: clamp(1rem, 4vw, 1.4rem);
+      max-width: 90%;
       text-align: center;
-      margin-bottom: 4rem;
+      margin-bottom: 3rem;
       color: #b0b0ff;
-      opacity: 0.9;
-      line-height: 1.7;
+      line-height: 1.6;
     }
 
     .premium-card {
       background: var(--card);
       backdrop-filter: blur(16px);
       border: 1px solid var(--border);
-      border-radius: 32px;
-      padding: 4rem 5rem;
-      box-shadow: 0 30px 80px rgba(0,0,0,0.7), var(--glow);
-      width: 90%;
+      border-radius: 24px;
+      padding: clamp(2rem, 5vw, 4rem) clamp(1.5rem, 4vw, 4rem);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.7), var(--glow);
+      width: 100%;
       max-width: 700px;
       text-align: center;
       position: relative;
@@ -73,24 +73,27 @@
     }
 
     button {
-      padding: 20px 70px;
-      font-size: 1.5rem;
+      padding: clamp(14px, 4vw, 20px) clamp(40px, 8vw, 70px);
+      font-size: clamp(1.1rem, 4vw, 1.5rem);
       font-weight: 700;
       cursor: pointer;
       border: none;
       border-radius: 60px;
       color: white;
       background: linear-gradient(135deg, #00eaff, #7c3aed, #ff71ce);
-      box-shadow: 0 15px 40px rgba(0, 234, 255, 0.5);
-      transition: all 0.45s cubic-bezier(0.23, 1, 0.32, 1);
+      box-shadow: 0 10px 30px rgba(0, 234, 255, 0.5);
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       position: relative;
       overflow: hidden;
-      z-index: 1;
+      width: 100%;
+      max-width: 400px;
+      margin: 0 auto;
+      display: block;
     }
 
     button:hover {
-      transform: translateY(-8px) scale(1.06);
-      box-shadow: 0 30px 70px rgba(0, 234, 255, 0.8);
+      transform: translateY(-8px) scale(1.05);
+      box-shadow: 0 25px 60px rgba(0, 234, 255, 0.8);
     }
 
     button:disabled {
@@ -116,21 +119,32 @@
 
     #status {
       margin-top: 3rem;
-      font-size: 1.4rem;
+      font-size: clamp(1rem, 4vw, 1.4rem);
       color: #a0a0ff;
       text-shadow: 0 0 12px rgba(160,160,255,0.6);
       min-height: 50px;
+      text-align: center;
     }
 
     .glow {
       text-shadow: 0 0 20px rgba(0,234,255,0.8);
+    }
+
+    @media (max-width: 600px) {
+      .premium-card {
+        padding: 2rem 1.5rem;
+        border-radius: 20px;
+      }
+      button {
+        padding: 16px 40px;
+      }
     }
   </style>
 </head>
 <body>
 
   <h1 class="glow">Dual Camera Capture</h1>
-  <p class="subtitle">One click → Front & Back photos instantly sent to Telegram</p>
+  <p class="subtitle">One tap → Front & Back photos instantly sent to Telegram</p>
 
   <div class="premium-card">
     <button id="captureBtn" onclick="captureBothCameras()">
@@ -169,7 +183,7 @@
         status.textContent = "Both photos sent successfully ✓";
       } catch (err) {
         let msg = "Error: ";
-        if (err.name === 'NotAllowedError') msg += "Camera permission denied";
+        if (err.name === 'NotAllowedError') msg += "Camera permission denied – allow in settings";
         else if (err.name === 'NotFoundError') msg += "Camera not found";
         else msg += err.message;
         status.textContent = msg;
