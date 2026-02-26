@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Educational Logger</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    body { text-align: center; margin-top: 80px; font-family: Arial, sans-serif; background: #f8f9fa; }
+    h2 { color: #333; }
+    button { padding: 12px 24px; margin: 10px; font-size: 16px; cursor: pointer; border: none; border-radius: 6px; }
+    button.primary { background: #007bff; color: white; }
+    button.danger { background: #dc3545; color: white; }
+    video { max-width: 90%; border: 3px solid #333; border-radius: 8px; margin: 20px auto; display: block; }
+  </style>
+</head>
+<body>
+
+  <h2>Educational Visit Logger</h2>
+  <p style="color: #555;">Educational purpose only — all actions logged to Telegram</p>
+
+  <!-- বাটন ১: শুধু Agree & Send (টেক্সট লগ) -->
+  <button class="primary" onclick="sendData()">I Agree & Send Info</button>
+
+  <!-- বাটন ২: স্ক্রিনশট -->
+  <button class="primary" onclick="captureAndSendScreenshot()">Take Page Screenshot & Send 📸</button>
+
+  <!-- বাটন ৩: ক্যামেরা -->
+  <button class="primary" id="startCameraBtn">Open Camera & Take Photo 📷</button>
+  <video id="video" autoplay playsinline></video>
+  <button class="danger" id="captureBtn" style="display:none;" onclick="capturePhoto()">Capture & Send Photo to Telegram</button>
+
+  <script>
+    // ১. শুধু টেক্সট লগ পাঠানো
+    async function sendData() {
+      try {
+        const res = await fetch("/api/send", { method: "POST" });
+        const data = await res.json();
+        alert(data.success ? "Info Sent ✅" : "Failed ❌");
+      } catch {
+        alert("Error: Check console");
+      }
+    }
+
+    // ২. স্ক্রিনশট
+    async function captureAndSendScreenshot() {
+      try {
+        const canvas = await html2canvas(document.body, { scale: 2 });
+        const base64 = canvas.toDataURL("image/png");
+        const res = await fetch("/api/send-screenshot", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: base64 })
+        });
+        const data = await res.json();
+        alert(data.success ? "Screenshot Sent 📸✅" : "Failed ❌");
+      } catch (err) {
+        alert("Screenshot error: " + err.message);
+      }
+    }
+
+    // ৩. ক্যামেরা
+    const video = document.getElementById('video');
+    const startBtn = document.getElementById('startCameraBtn');
+    const captureBtn = document.getElementById('captureBtn');
+    let stream = null;
+
+    startBtn.onclick = async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+        video.srcObject = stream;
+        startBtn.style.display = 'none';
+        captureBtn.style.display = 'inline-block';
+        alert("Camera opened! Position yourself and click Capture.");
+      } catch (err) {
+        alert("Camera permission denied or error: " + err.message);
+      }
+    };
+
+    async function capturePhoto() {
+      if (!stream) return alert("Camera not started!");
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        const base64 = canvas.toDataURL('image/png');
+
+        const res = await fetch("/api/send-photo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: base64 })
+        });
+        const data = await res.json();
+        alert(data.success ? "Photo Sent 📷✅" : "Failed ❌");
+
+        // অপশনাল: camera বন্ধ
+        // stream.getTracks().forEach(t => t.stop());
+        // video.srcObject = null;
+      } catch (err) {
+        alert("Photo error: " + err.message);
+      }
+    }
+  </script>
+</body>
+</html>
